@@ -5,133 +5,143 @@ body {
   -webkit-touch-callout: none;
   touch-action: none; 
 }
-canvas { display: block; touch-action: none; }
+canvas { display: block; touch-action: none; z-index: 1; position: relative;}
+
+/* --- CRT Retro Arcade Scanline Effect --- */
+body::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 100;
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none; /* Lets you click through the overlay */
+}
 
 /* UI OVERLAY STYLES */
-#ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+#ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+/* --- Floating Animation for Menus --- */
+@keyframes float {
+  0% { transform: translate(-50%, -50%) translateY(0px); }
+  50% { transform: translate(-50%, -50%) translateY(-10px); }
+  100% { transform: translate(-50%, -50%) translateY(0px); }
+}
 
 .menu-screen {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  text-align: center; background: rgba(10, 0, 0, 0.85); padding: 40px 60px;
-  border: 2px solid cyan; box-shadow: 0 0 30px cyan, inset 0 0 20px cyan;
+  text-align: center; 
+  /* Frosted Glass Effect */
+  background: rgba(10, 0, 15, 0.7); 
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 40px 60px;
+  border: 2px solid cyan; 
+  border-radius: 15px; /* Softer, modern edges */
+  box-shadow: 0 0 40px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.2);
   pointer-events: auto; display: none; flex-direction: column; gap: 20px;
-  width: 80%; max-width: 400px; box-sizing: border-box;
+  width: 80%; max-width: 450px; box-sizing: border-box;
+  animation: float 4s ease-in-out infinite;
 }
 
-h1 { font-size: 32px; margin: 0 0 10px 0; letter-spacing: 2px; }
-@media (min-width: 600px) { h1 { font-size: 48px; letter-spacing: 4px; } }
+h1 { font-size: 32px; margin: 0 0 10px 0; letter-spacing: 3px; }
+@media (min-width: 600px) { h1 { font-size: 48px; letter-spacing: 5px; } }
 
-.title-cyan { color: cyan; text-shadow: 0 0 15px cyan; }
-.title-red { color: red; text-shadow: 0 0 15px red; border-color: red; }
+.title-cyan { color: #fff; text-shadow: 0 0 10px cyan, 0 0 20px cyan, 0 0 40px cyan; }
+.title-red { color: #fff; text-shadow: 0 0 10px red, 0 0 20px red, 0 0 40px red; border-color: red; }
 
 /* Neon Buttons */
 button {
-  background: transparent; color: cyan; border: 2px solid cyan;
-  padding: 15px 20px; font-size: 16px; font-family: 'Orbitron', sans-serif;
-  cursor: pointer; box-shadow: 0 0 10px cyan, inset 0 0 5px cyan; text-shadow: 0 0 5px cyan; transition: all 0.2s;
-  width: 100%;
+  background: rgba(0, 255, 255, 0.05); 
+  color: cyan; border: 2px solid cyan; border-radius: 8px;
+  padding: 15px 20px; font-size: 16px; font-family: 'Orbitron', sans-serif; letter-spacing: 2px;
+  cursor: pointer; box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), inset 0 0 5px rgba(0, 255, 255, 0.5); 
+  text-shadow: 0 0 5px cyan; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  width: 100%; text-transform: uppercase;
 }
-button:hover { background: cyan; color: black; box-shadow: 0 0 20px cyan, inset 0 0 10px cyan; }
+button:hover { 
+  background: cyan; color: black; 
+  box-shadow: 0 0 30px cyan, inset 0 0 10px cyan; 
+  transform: scale(1.05); /* Button pops out when hovered */
+}
 
-.btn-red { color: red; border-color: red; box-shadow: 0 0 10px red, inset 0 0 5px red; text-shadow: 0 0 5px red; }
-.btn-red:hover { background: red; color: black; box-shadow: 0 0 20px red, inset 0 0 10px red; }
-
-button.active-diff { background: cyan; color: black; box-shadow: 0 0 20px cyan, inset 0 0 10px cyan; }
+.btn-red { color: #ff3333; border-color: #ff3333; box-shadow: 0 0 10px red, inset 0 0 5px red; text-shadow: 0 0 5px red; }
+.btn-red:hover { background: #ff3333; color: black; box-shadow: 0 0 30px red, inset 0 0 10px red; }
+button.active-diff { background: cyan; color: black; box-shadow: 0 0 20px cyan, inset 0 0 10px cyan; transform: scale(1.05); }
 
 /* Settings Sliders & Rows */
-.setting-row { display: flex; flex-direction: column; text-align: left; gap: 10px; color: cyan; font-size: 12px; letter-spacing: 1px;}
-.diff-group { display: flex; gap: 5px; }
-.diff-group button { padding: 8px; font-size: 12px; }
+.setting-row { display: flex; flex-direction: column; text-align: left; gap: 10px; color: cyan; font-size: 13px; letter-spacing: 1.5px;}
+.diff-group { display: flex; gap: 10px; }
+.diff-group button { padding: 10px; font-size: 12px; }
 
 input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
 input[type=range]:focus { outline: none; }
-input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; cursor: pointer; background: rgba(0,255,255,0.2); border: 1px solid cyan; box-shadow: 0 0 5px cyan; }
-input[type=range]::-webkit-slider-thumb { border: 2px solid cyan; height: 20px; width: 20px; border-radius: 50%; background: black; cursor: pointer; -webkit-appearance: none; margin-top: -7px; box-shadow: 0 0 10px cyan; }
+input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: rgba(0,255,255,0.2); border-radius: 3px; box-shadow: 0 0 5px cyan; }
+input[type=range]::-webkit-slider-thumb { border: 2px solid cyan; height: 20px; width: 20px; border-radius: 50%; background: #002222; cursor: pointer; -webkit-appearance: none; margin-top: -7px; box-shadow: 0 0 15px cyan; transition: transform 0.1s; }
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); background: cyan; }
 
 /* In-Game HUD */
-#hud { display: none; justify-content: space-between; padding: 15px 20px; }
-.health-wrapper { width: 40%; max-width: 250px; }
-.health-label { color: cyan; font-size: 12px; margin-bottom: 5px; letter-spacing: 1px; text-shadow: 0 0 5px cyan; }
-.health-box { width: 100%; height: 12px; border: 2px solid cyan; box-shadow: 0 0 10px cyan; background: rgba(0, 255, 255, 0.1); }
-#health-bar { width: 100%; height: 100%; background: cyan; box-shadow: 0 0 10px cyan; transition: width 0.2s ease-out, background-color 0.2s; }
+#hud { display: none; justify-content: space-between; padding: 20px 30px; }
+.health-wrapper { width: 40%; max-width: 300px; }
+.health-label { color: cyan; font-size: 14px; margin-bottom: 8px; letter-spacing: 2px; text-shadow: 0 0 5px cyan; font-weight: bold; }
+.health-box { width: 100%; height: 16px; border: 2px solid cyan; border-radius: 8px; box-shadow: 0 0 15px rgba(0,255,255,0.5); background: rgba(0, 255, 255, 0.1); overflow: hidden; }
+#health-bar { width: 100%; height: 100%; background: cyan; box-shadow: 0 0 10px cyan; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s; }
+
+/* --- Critical Health Pulse Animation --- */
+@keyframes criticalPulse {
+  0% { box-shadow: 0 0 10px red; background-color: rgba(255,0,0,0.2); border-color: red;}
+  50% { box-shadow: 0 0 30px red, inset 0 0 20px red; background-color: rgba(255,0,0,0.5); border-color: #ff5555;}
+  100% { box-shadow: 0 0 10px red; background-color: rgba(255,0,0,0.2); border-color: red;}
+}
+.health-critical { animation: criticalPulse 0.8s infinite !important; }
 
 .stats-wrapper { text-align: right; }
-#score-display { color: white; font-size: 20px; font-weight: 700; text-shadow: 0 0 10px rgba(255, 255, 255, 0.8); letter-spacing: 1px; }
-#level-display { color: cyan; font-size: 14px; margin-top: 5px; letter-spacing: 1px; text-shadow: 0 0 5px cyan; }
+#score-display { color: white; font-size: 24px; font-weight: 700; text-shadow: 0 0 15px rgba(255, 255, 255, 0.8); letter-spacing: 2px; }
+#level-display { color: cyan; font-size: 16px; margin-top: 5px; letter-spacing: 2px; text-shadow: 0 0 8px cyan; font-weight: bold; }
 
-/* Menus */
+/* Menus specific overrides */
 #main-menu { display: flex; border-color: cyan; }
-#pause-menu { border-color: yellow; box-shadow: 0 0 30px yellow, inset 0 0 20px yellow; }
-#pause-menu h1 { color: yellow; text-shadow: 0 0 15px yellow; }
-#pause-menu button { color: yellow; border-color: yellow; box-shadow: 0 0 10px yellow, inset 0 0 5px yellow; text-shadow: 0 0 5px yellow;}
-#pause-menu button:hover { background: yellow; color: black; box-shadow: 0 0 20px yellow, inset 0 0 10px yellow; }
-#game-over-screen { border-color: red; box-shadow: 0 0 30px red, inset 0 0 20px red; }
-#game-over-screen p { color: white; font-size: 16px; margin-bottom: 30px; }
-#final-score { color: yellow; font-weight: bold; }
-#shutdown-screen { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: black; color: red; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; z-index: 100;}
+#pause-menu { border-color: yellow; box-shadow: 0 0 40px rgba(255, 255, 0, 0.3), inset 0 0 20px rgba(255, 255, 0, 0.2); }
+#pause-menu h1 { color: #fff; text-shadow: 0 0 10px yellow, 0 0 20px yellow; }
+#pause-menu button { color: yellow; border-color: yellow; box-shadow: 0 0 10px rgba(255, 255, 0, 0.5), inset 0 0 5px rgba(255, 255, 0, 0.5); text-shadow: 0 0 5px yellow;}
+#pause-menu button:hover { background: yellow; color: black; box-shadow: 0 0 30px yellow, inset 0 0 10px yellow; }
+#game-over-screen { border-color: red; box-shadow: 0 0 40px rgba(255, 0, 0, 0.3), inset 0 0 20px rgba(255, 0, 0, 0.2); }
+#game-over-screen p { color: white; font-size: 18px; margin-bottom: 30px; letter-spacing: 1px;}
+#final-score { color: yellow; font-weight: bold; font-size: 24px; text-shadow: 0 0 10px yellow;}
 
-/* --- VIRTUAL CONTROLLER STYLES --- */
+/* VIRTUAL CONTROLLER */
 #mobile-controls {
-  display: none; /* Hidden by default, shown via JS on touch devices */
-  position: absolute;
-  bottom: 40px;
-  left: 0;
-  width: 100%;
-  padding: 0 40px;
-  box-sizing: border-box;
-  justify-content: space-between;
-  align-items: flex-end;
-  pointer-events: none; /* Let canvas clicks pass through the empty space */
-  z-index: 50;
+  display: none; position: absolute; bottom: 40px; left: 0; width: 100%; padding: 0 40px;
+  box-sizing: border-box; justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 50;
 }
-
 #joystick-base {
-  width: 120px;
-  height: 120px;
-  background: rgba(0, 255, 255, 0.1);
-  border: 2px solid cyan;
-  border-radius: 50%;
-  position: relative;
-  pointer-events: auto; /* Catch touches */
-  touch-action: none; /* Prevent scrolling */
-  box-shadow: 0 0 15px cyan, inset 0 0 10px cyan;
-  flex-shrink: 0;
+  width: 120px; height: 120px; background: rgba(0, 255, 255, 0.1); border: 2px solid cyan; border-radius: 50%;
+  position: relative; pointer-events: auto; touch-action: none; box-shadow: 0 0 20px rgba(0,255,255,0.4), inset 0 0 15px rgba(0,255,255,0.4); flex-shrink: 0; backdrop-filter: blur(4px);
 }
-
 #joystick-stick {
-  width: 60px;
-  height: 60px;
-  background: cyan;
-  border-radius: 50%;
-  position: absolute;
-  top: 30px; /* Center it */
-  left: 30px;
-  box-shadow: 0 0 15px cyan;
-  pointer-events: none; 
+  width: 60px; height: 60px; background: cyan; border-radius: 50%; position: absolute; top: 30px; left: 30px;
+  box-shadow: 0 0 20px cyan; pointer-events: none; transition: transform 0.05s linear;
 }
-
 #btn-fire {
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  background: rgba(255, 0, 0, 0.2);
-  border: 2px solid red;
-  color: red;
-  font-size: 18px;
-  font-weight: bold;
-  pointer-events: auto;
-  touch-action: none;
-  box-shadow: 0 0 15px red, inset 0 0 10px red;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  flex-shrink: 0;
+  width: 90px; height: 90px; border-radius: 50%; background: rgba(255, 0, 0, 0.15); border: 2px solid red;
+  color: #fff; font-size: 18px; font-weight: bold; text-shadow: 0 0 5px red; pointer-events: auto; touch-action: none;
+  box-shadow: 0 0 20px rgba(255,0,0,0.4), inset 0 0 15px rgba(255,0,0,0.4); display: flex; justify-content: center; align-items: center;
+  margin: 0; padding: 0; flex-shrink: 0; backdrop-filter: blur(4px);
 }
+#btn-fire:active { background: rgba(255, 0, 0, 0.6); box-shadow: 0 0 30px red, inset 0 0 20px red; transform: scale(0.95); }
 
-#btn-fire:active {
-  background: rgba(255, 0, 0, 0.5);
-  box-shadow: 0 0 25px red, inset 0 0 20px red;
-  color: white;
+/* --- SHUTDOWN SCREEN --- */
+#shutdown-screen { 
+  display: none; 
+  position: absolute; 
+  top: 0; left: 0; 
+  width: 100%; height: 100%; 
+  background: black; 
+  color: red; 
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center; 
+  pointer-events: auto; 
+  z-index: 100;
 }
