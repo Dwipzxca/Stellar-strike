@@ -43,7 +43,12 @@ body::after {
   width: 90%; /* WIDER ON MOBILE */
   max-width: 450px; box-sizing: border-box;
   animation: float 4s ease-in-out infinite;
+  pointer-events: auto;
+  max-height: 85vh;        
+  overflow-y: auto;        
+  padding-right: 10px;     
 }
+
 
 h1 { font-size: 32px; margin: 0 0 10px 0; letter-spacing: 3px; }
 @media (min-width: 600px) { h1 { font-size: 48px; letter-spacing: 5px; } }

@@ -628,7 +628,7 @@ function draw(){
   ctx.lineWidth = 4; ctx.lineCap = "round";
   bullets.forEach(b=>{ ctx.strokeStyle = b.color; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.dx*1.5, b.y - b.dy*1.5); ctx.stroke(); });
 
-  enemyBullets.forEach(b=>{ ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
+  enemyBullets.forEach(b=>{ ctx.fillStyle = "orange"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
   ctx.globalCompositeOperation = "source-over"; 
 
   if (activeTeslaArcs.length > 0) {
