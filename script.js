@@ -1,7 +1,7 @@
 let unlockedLevel = parseInt(localStorage.getItem("unlockedLevel")) || 0;
 
 // --- DEV MODE SETTINGS ---
-const DEV_MODE = false; 
+const DEV_MODE = true; 
 let godMode = false;
 
 // --- Configuration & State ---
