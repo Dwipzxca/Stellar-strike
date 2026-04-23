@@ -125,6 +125,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); backgroun
 #highscore-display { color: gold; font-size: 13px; margin-top: 2px; letter-spacing: 2px; text-shadow: 0 0 8px gold; }
 #level-display { color: cyan; font-size: 16px; margin-top: 5px; letter-spacing: 2px; text-shadow: 0 0 8px cyan; font-weight: bold; }
 #coin-display { color: gold; font-size: 14px; margin-top: 4px; letter-spacing: 2px; text-shadow: 0 0 8px gold, 0 0 16px gold; font-weight: bold; }
+#altfire-display { color: #ff00ff; font-size: 12px; margin-top: 4px; letter-spacing: 2px; text-shadow: 0 0 8px #ff00ff; font-weight: bold; }
 
 /* Coin pickup float-up animation */
 @keyframes coinFloat {
@@ -156,6 +157,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); backgroun
 #pause-menu h1 { color: #fff; text-shadow: 0 0 10px yellow, 0 0 20px yellow; }
 #pause-menu button { color: yellow; border-color: yellow; box-shadow: 0 0 10px rgba(255, 255, 0, 0.5), inset 0 0 5px rgba(255, 255, 0, 0.5); text-shadow: 0 0 5px yellow;}
 #pause-menu button:hover { background: yellow; color: black; box-shadow: 0 0 30px yellow, inset 0 0 10px yellow; }
+.pause-stats {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid rgba(255,255,0,0.3); border-radius: 8px;
+  padding: 10px 20px; background: rgba(255,255,0,0.05);
+}
+.pause-stats span { color: white; font-size: 13px; letter-spacing: 2px; }
+#pause-best { color: gold !important; text-shadow: 0 0 6px gold; }
 #game-over-screen { border-color: red; box-shadow: 0 0 40px rgba(255, 0, 0, 0.3), inset 0 0 20px rgba(255, 0, 0, 0.2); }
 #game-over-screen p { color: white; font-size: 18px; margin-bottom: 30px; letter-spacing: 1px;}
 #final-score { color: yellow; font-weight: bold; font-size: 24px; text-shadow: 0 0 10px yellow;}

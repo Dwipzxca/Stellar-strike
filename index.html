@@ -18,9 +18,8 @@
     <button id="btn-pause-icon">⏸</button>
     <div class="stats-wrapper">
       <div id="score-display">SCORE: 0</div>
-      <div id="highscore-display">BEST: 0</div>
-      <div id="level-display">LEVEL: 1</div>
       <div id="coin-display">⬡ 0 CREDITS</div>
+      <div id="altfire-display" title="Right-click or hold E to charge">⚡ PLASMA: READY</div>
       <div class="boss-incoming-wrapper">
         <div class="boss-incoming-label">BOSS INCOMING</div>
         <div class="boss-incoming-box">
@@ -91,6 +90,11 @@
 
   <div id="pause-menu" class="menu-screen">
     <h1>SYSTEM PAUSED</h1>
+    <div class="pause-stats">
+      <span id="pause-level">LEVEL: 1</span>
+      <span id="pause-score">SCORE: 0</span>
+      <span id="pause-best">BEST: 0</span>
+    </div>
     <button id="btn-resume">RESUME</button>
     <button id="btn-quit" class="btn-red">ABORT MISSION</button>
   </div>
@@ -106,6 +110,7 @@
 
   <div id="game-over-screen" class="menu-screen">
     <h1 class="title-red">CRITICAL FAILURE</h1>
+    <p>REACHED LEVEL: <span id="go-level">1</span></p>
     <p>FINAL SCORE: <span id="final-score">0</span></p>
     <p style="color:gold; font-size:14px; letter-spacing:2px; margin:0;">BEST: <span id="go-highscore">0</span></p>
     <button id="btn-restart" class="btn-red">REBOOT SYSTEM</button>
