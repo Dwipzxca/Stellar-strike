@@ -1,190 +1,148 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Stellar Strike</title>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-  <div id="game-wrapper">
-    <div id="ui-layer">
-      <!-- NEW UI CONTAINERS -->
-      <div id="killfeed"></div>
-      <div id="damage-container"></div>
-      
-      <div id="hud">
-        <div class="health-wrapper">
-          <div class="health-label">SYSTEM INTEGRITY</div>
-          <div class="health-box">
-            <div id="health-bar"></div>
-          </div>
-        </div>
-        <button id="btn-pause-icon">⏸</button>
-        <div class="stats-wrapper">
-          <div id="score-display">SCORE: 0</div>
-          <div id="coin-display">⬡ 0 CREDITS</div>
-          <div id="altfire-display" title="Right-click or hold E to charge"> PLASMA: READY</div>
-          <div class="boss-incoming-wrapper">
-            <div class="boss-incoming-label">BOSS INCOMING</div>
-            <div class="boss-incoming-box">
-              <div id="boss-progress-bar"></div>
-            </div>
-            <div id="boss-score-display">0 / 500</div>
-          </div>
-        </div>
-      </div>
-
-      <div id="main-menu" class="menu-screen main-menu-layout">
-        <div class="main-menu-content">
-          <div class="menu-header">
-            <div class="system-status">
-              <span class="status-dot"></span> SYSTEM ONLINE // SECTOR 07
-            </div>
-            <h1 class="title-cyan">STELLAR STRIKE</h1>
-            <div class="title-line"></div>
-          </div>
-
-          <div class="menu-actions">
-            <button id="btn-play" class="main-btn">
-              <span class="btn-decor"></span>
-              INITIALIZE (PLAY)
-            </button>
-            <button id="btn-shop-open" class="main-btn">
-              <span class="btn-decor"></span>
-              ARMORY (SHOP)
-            </button>
-            <button id="btn-settings-open" class="main-btn">
-              <span class="btn-decor"></span>
-              CONFIG (SETTINGS)
-            </button>
-            <button id="btn-exit" class="btn-red main-btn">
-              <span class="btn-decor"></span>
-              SHUTDOWN
-            </button>
-          </div>
-
-          <div class="menu-footer">
-            <div class="footer-data">
-              <span>COORDINATES: 42.09N / 73.22W</span>
-              <span>PILOT: UNKNOWN</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="menu-decor-line"></div>
-      </div>
-
-      <!-- ===== LEVEL SELECT SCREEN ===== -->
-      <div id="level-select-menu" class="menu-screen" style="max-width: 680px;">
-        <h1 class="title-cyan">SELECT MISSION</h1>
-        <p class="level-select-subtitle">CHOOSE YOUR DEPLOYMENT ZONE</p>
-        <div id="level-grid" class="level-grid"></div>
-        <button id="btn-level-back">◄ RETURN TO BASE</button>
-      </div>
-      <!-- ================================ -->
-
-      <div id="settings-menu" class="menu-screen">
-        <h1 class="title-cyan">CONFIG</h1>
-        <div class="setting-row">
-          <label>MUSIC: <span id="bgm-val">100%</span></label>
-          <input type="range" id="slider-bgm" min="0" max="100" value="100">
-        </div>
-        <div class="setting-row">
-          <label>SFX: <span id="sfx-val">100%</span></label>
-          <input type="range" id="slider-sfx" min="0" max="100" value="100">
-        </div>
-        <div class="setting-row">
-          <label>SENSITIVITY: <span id="sens-val">100%</span></label>
-          <input type="range" id="slider-sens" min="20" max="250" value="100">
-        </div>
-        <div class="setting-row">
-          <label>GUI SCALE: <span id="gui-val">100%</span></label>
-          <input type="range" id="slider-gui" min="50" max="150" value="100">
-        </div>
-        <div class="setting-row">
-          <label>FOV SCALE: <span id="fov-val">100%</span></label>
-          <input type="range" id="slider-fov" min="50" max="200" value="100">
-        </div>
-        <div class="setting-row">
-          <label>GAME SCALE: <span id="game-val">100%</span></label>
-          <input type="range" id="slider-game" min="40" max="100" value="100">
-        </div>
-        <div class="setting-row">
-          <label>POST PROCESSING:</label>
-          <div class="diff-group">
-            <button id="toggle-scanlines" class="active-diff toggle-btn"
-              onclick="toggleFX('scanlines')">SCANLINES</button>
-            <button id="toggle-bloom" class="active-diff toggle-btn" onclick="toggleFX('bloom')">BLOOM</button>
-            <button id="toggle-shake" class="active-diff toggle-btn" onclick="toggleFX('shake')">SHAKE</button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <label>THREAT LEVEL:</label>
-          <div class="diff-group">
-            <button id="diff-easy" onclick="setDifficulty('easy')">CASUAL</button>
-            <button id="diff-normal" class="active-diff" onclick="setDifficulty('normal')">NORMAL</button>
-            <button id="diff-hard" onclick="setDifficulty('hard')">HARDCORE</button>
-          </div>
-        </div>
-        <button id="btn-settings-close">RETURN TO MENU</button>
-      </div>
-
-      <div id="pause-menu" class="menu-screen">
-        <h1>SYSTEM PAUSED</h1>
-        <div class="pause-stats">
-          <span id="pause-level">LEVEL: 1</span>
-          <span id="pause-score">SCORE: 0</span>
-          <span id="pause-best">BEST: 0</span>
-        </div>
-        <button id="btn-resume">RESUME</button>
-        <button id="btn-quit" class="btn-red">ABORT MISSION</button>
-      </div>
-
-      <!-- ===== SHOP SCREEN ===== -->
-      <div id="shop-menu" class="menu-screen" style="max-width: 620px;">
-        <h1 class="title-cyan">ARMORY</h1>
-        <div id="shop-coins" class="shop-coins-display">⬡ 0 CREDITS</div>
-        <div id="shop-items" class="shop-items-list"></div>
-        <button id="btn-shop-close">◄ RETURN TO BASE</button>
-      </div>
-      <!-- ========================= -->
-
-      <div id="game-over-screen" class="menu-screen">
-        <h1 class="title-red">CRITICAL FAILURE</h1>
-        <p>REACHED LEVEL: <span id="go-level">1</span></p>
-        <p>FINAL SCORE: <span id="final-score">0</span></p>
-        <p style="color:gold; font-size:14px; letter-spacing:2px; margin:0;">BEST: <span id="go-highscore">0</span></p>
-        <button id="btn-restart" class="btn-red">REBOOT SYSTEM</button>
-      </div>
-
-      <div id="mobile-controls">
-        <div id="joystick-base">
-          <div id="joystick-stick"></div>
-        </div>
-        <div id="right-buttons">
-          <button style="font-size: 5px; width:50px; height:50px;" id="btn-plasma">PLASMA</button>
-          <button id="btn-fire">FIRE</button>
-        </div>
-      </div>
-
+<div id="game-wrapper">
+<div id="ui-layer">
+  <div id="hud">
+    <div class="health-wrapper">
+      <div class="health-label">SYSTEM INTEGRITY</div>
+      <div class="health-box"><div id="health-bar"></div></div>
     </div>
-
-    <canvas id="c"></canvas>
+    <button id="btn-pause-icon">⏸</button>
+    <div class="stats-wrapper">
+      <div id="score-display">SCORE: 0</div>
+      <div id="coin-display">⬡ 0 CREDITS</div>
+      <div id="altfire-display" title="Right-click or hold E to charge"> PLASMA: READY</div>
+      <div class="boss-incoming-wrapper">
+        <div class="boss-incoming-label">BOSS INCOMING</div>
+        <div class="boss-incoming-box">
+          <div id="boss-progress-bar"></div>
+        </div>
+        <div id="boss-score-display">0 / 500</div>
+      </div>
+    </div>
   </div>
 
-  <div id="shutdown-screen">
-    <h1 class="title-red">SYSTEM TERMINATED.</h1>
-    <p style="color:white; font-family: monospace;">You may close this tab.</p>
+  <div id="main-menu" class="menu-screen">
+    <h1 class="title-cyan">STELLAR STRIKE</h1>
+    <button id="btn-play">INITIALIZE (PLAY)</button>
+    <button id="btn-shop-open">ARMORY (SHOP)</button>
+    <button id="btn-settings-open">CONFIG (SETTINGS)</button>
+    <button id="btn-exit" class="btn-red">SHUTDOWN</button>
   </div>
 
-  <script src="script.js"></script>
+  <!-- ===== LEVEL SELECT SCREEN ===== -->
+  <div id="level-select-menu" class="menu-screen" style="max-width: 680px;">
+    <h1 class="title-cyan">SELECT MISSION</h1>
+    <p class="level-select-subtitle">CHOOSE YOUR DEPLOYMENT ZONE</p>
+    <div id="level-grid" class="level-grid"></div>
+    <button id="btn-level-back">◄ RETURN TO BASE</button>
+  </div>
+  <!-- ================================ -->
+
+  <div id="settings-menu" class="menu-screen">
+    <h1 class="title-cyan">CONFIG</h1>
+    <div class="setting-row">
+      <label>MUSIC: <span id="bgm-val">100%</span></label>
+      <input type="range" id="slider-bgm" min="0" max="100" value="100">
+    </div>
+    <div class="setting-row">
+      <label>SFX: <span id="sfx-val">100%</span></label>
+      <input type="range" id="slider-sfx" min="0" max="100" value="100">
+    </div>
+    <div class="setting-row">
+      <label>SENSITIVITY: <span id="sens-val">100%</span></label>
+      <input type="range" id="slider-sens" min="20" max="250" value="100">
+    </div>
+    <div class="setting-row">
+      <label>GUI SCALE: <span id="gui-val">100%</span></label>
+      <input type="range" id="slider-gui" min="50" max="150" value="100">
+    </div>
+    <div class="setting-row">
+      <label>FOV SCALE: <span id="fov-val">100%</span></label>
+      <input type="range" id="slider-fov" min="50" max="200" value="100">
+    </div>
+    <div class="setting-row">
+      <label>GAME SCALE: <span id="game-val">100%</span></label>
+      <input type="range" id="slider-game" min="40" max="100" value="100">
+    </div>
+    <div class="setting-row">
+      <label>POST PROCESSING:</label>
+      <div class="diff-group">
+        <button id="toggle-scanlines" class="active-diff toggle-btn" onclick="toggleFX('scanlines')">SCANLINES</button>
+        <button id="toggle-bloom" class="active-diff toggle-btn" onclick="toggleFX('bloom')">BLOOM</button>
+        <button id="toggle-shake" class="active-diff toggle-btn" onclick="toggleFX('shake')">SHAKE</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <label>THREAT LEVEL:</label>
+      <div class="diff-group">
+        <button id="diff-easy" onclick="setDifficulty('easy')">CASUAL</button>
+        <button id="diff-normal" class="active-diff" onclick="setDifficulty('normal')">NORMAL</button>
+        <button id="diff-hard" onclick="setDifficulty('hard')">HARDCORE</button>
+      </div>
+    </div>
+    <button id="btn-settings-close">RETURN TO MENU</button>
+  </div>
+
+  <div id="pause-menu" class="menu-screen">
+    <h1>SYSTEM PAUSED</h1>
+    <div class="pause-stats">
+      <span id="pause-level">LEVEL: 1</span>
+      <span id="pause-score">SCORE: 0</span>
+      <span id="pause-best">BEST: 0</span>
+    </div>
+    <button id="btn-resume">RESUME</button>
+    <button id="btn-quit" class="btn-red">ABORT MISSION</button>
+  </div>
+
+  <!-- ===== SHOP SCREEN ===== -->
+  <div id="shop-menu" class="menu-screen" style="max-width: 620px;">
+    <h1 class="title-cyan">ARMORY</h1>
+    <div id="shop-coins" class="shop-coins-display">⬡ 0 CREDITS</div>
+    <div id="shop-items" class="shop-items-list"></div>
+    <button id="btn-shop-close">◄ RETURN TO BASE</button>
+  </div>
+  <!-- ========================= -->
+
+  <div id="game-over-screen" class="menu-screen">
+    <h1 class="title-red">CRITICAL FAILURE</h1>
+    <p>REACHED LEVEL: <span id="go-level">1</span></p>
+    <p>FINAL SCORE: <span id="final-score">0</span></p>
+    <p style="color:gold; font-size:14px; letter-spacing:2px; margin:0;">BEST: <span id="go-highscore">0</span></p>
+    <button id="btn-restart" class="btn-red">REBOOT SYSTEM</button>
+  </div>
+
+  <div id="mobile-controls">
+    <div id="joystick-base">
+      <div id="joystick-stick"></div>
+    </div>
+    <div id="right-buttons">
+      <button style="font-size: 5px; width:50px; height:50px;" id="btn-plasma">PLASMA</button>
+      <button id="btn-fire">FIRE</button>
+    </div>
+  </div>
+
+</div>
+
+<canvas id="c"></canvas>
+</div>
+
+<div id="shutdown-screen">
+  <h1 class="title-red">SYSTEM TERMINATED.</h1>
+  <p style="color:white; font-family: monospace;">You may close this tab.</p>
+</div>
+
+
+
+<script src="script.js"></script>
 </body>
-
 </html>

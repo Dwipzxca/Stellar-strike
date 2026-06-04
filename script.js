@@ -33,298 +33,100 @@ const menus = {
   levelSelect: document.getElementById('level-select-menu')
 };
 
-// --- UI Transitions & 3D Helper ---
-let menuTilt = { x: 0, y: 0, targetX: 0, targetY: 0 };
-
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll('.menu-screen').forEach(m => {
-    let glare = document.createElement('div');
-    glare.className = 'glare';
-    m.insertBefore(glare, m.firstChild);
-  });
+// UI Handlers
+document.getElementById('btn-settings-open').addEventListener('click', () => { menus.main.style.display = "none"; menus.settings.style.display = "flex"; });
+document.getElementById('btn-settings-close').addEventListener('click', () => { menus.settings.style.display = "none"; menus.main.style.display = "flex"; });
+document.getElementById('btn-exit').addEventListener('click', () => { menus.main.style.display = "none"; menus.shutdown.style.display = "flex"; });
+document.getElementById('btn-shop-open').addEventListener('click', showShop);
+document.getElementById('btn-shop-close').addEventListener('click', () => { menus.shop.style.display = "none"; menus.main.style.display = "flex"; });
+document.getElementById('slider-bgm').addEventListener('input', (e) => { bgmVolume = e.target.value / 100; document.getElementById('bgm-val').innerText = e.target.value + "%"; });
+document.getElementById('slider-sfx').addEventListener('input', (e) => { sfxVolume = e.target.value / 100; document.getElementById('sfx-val').innerText = e.target.value + "%"; });
+document.getElementById('slider-sens').addEventListener('input', (e) => { joystickSensitivity = e.target.value / 100; document.getElementById('sens-val').innerText = e.target.value + "%"; });
+document.getElementById('slider-gui').addEventListener('input', (e) => {
+  guiScale = e.target.value / 100;
+  document.getElementById('gui-val').innerText = e.target.value + "%";
+  document.getElementById('ui-layer').style.transform = `scale(${guiScale})`;
+  document.getElementById('ui-layer').style.transformOrigin = 'top left';
+  document.getElementById('ui-layer').style.width = `${100 / guiScale}%`;
+  document.getElementById('ui-layer').style.height = `${100 / guiScale}%`;
 });
 
-function showMenu(menuKey) {
-  // Hide all menus first
-  Object.values(menus).forEach(m => {
-    if (m) {
-      m.classList.remove('active');
-      m.classList.remove('flicker-anim');
-    }
-  });
-  
-  // Show the requested menu
-  const target = menus[menuKey];
-  if (target) {
-    target.classList.add('active');
-    target.classList.add('flicker-anim');
+document.getElementById('slider-fov').addEventListener('input', (e) => {
+  fovScale = e.target.value / 100;
+  document.getElementById('fov-val').innerText = e.target.value + "%";
+  // Scale the canvas visually from center — simulates zooming the game view
+  c.style.transform = `scale(${fovScale})`;
+  c.style.transformOrigin = 'center center';
+  c.style.position = 'fixed';
+  c.style.top = '50%';
+  c.style.left = '50%';
+  c.style.translate = '-50% -50%';
+});
+
+document.getElementById('slider-game').addEventListener('input', (e) => {
+  const gameScale = e.target.value / 100;
+  document.getElementById('game-val').innerText = e.target.value + "%";
+  const wrapper = document.getElementById('game-wrapper');
+  wrapper.style.transform = `scale(${gameScale})`;
+  // Remove menu scroll when game is scaled small enough (menus fit without scrolling)
+  wrapper.classList.toggle('no-scroll-menus', gameScale <= 0.80);
+});
+
+function toggleFX(type) {
+  postFX[type] = !postFX[type];
+  const btn = document.getElementById('toggle-' + type);
+  btn.classList.toggle('active-diff', postFX[type]);
+
+  if (type === 'scanlines') {
+    document.body.classList.toggle('no-scanlines', !postFX.scanlines);
   }
+  if (type === 'bloom') {
+    c.classList.toggle('bloom-on', postFX.bloom);
+  }
+  // 'shake' is read directly from postFX.shake inside triggerShake()
 }
 
-function hideAllMenus() {
-  Object.values(menus).forEach(m => { if (m) m.classList.remove('active'); });
+// Init bloom on by default
+c.classList.add('bloom-on');
+
+function setDifficulty(level) {
+  difficulty = level;
+  ['easy', 'normal', 'hard'].forEach(l => document.getElementById('diff-' + l).classList.remove('active-diff'));
+  document.getElementById('diff-' + level).classList.add('active-diff');
 }
-
-// UI Handlers
-document.getElementById('btn-settings-open').addEventListener('click', () => showMenu('settings'));
-document.getElementById('btn-settings-close').addEventListener('click', () => showMenu('main'));
-document.getElementById('btn-exit').addEventListener('click', () => { hideAllMenus(); menus.shutdown.style.display = "flex"; menus.shutdown.classList.add('flicker-anim'); });
-document.getElementById('btn-shop-open').addEventListener('click', () => { showShop(); showMenu('shop'); });
-document.getElementById('btn-shop-close').addEventListener('click', () => showMenu('main'));
-document.getElementById('btn-level-back').addEventListener('click', () => showMenu('main'));
-document.getElementById('btn-resume').addEventListener('click', togglePause); 
-document.getElementById('btn-quit').addEventListener('click', returnToMenu);
-document.getElementById('btn-pause-icon').addEventListener('click', togglePause);
-document.getElementById('btn-play').addEventListener('click', () => { showLevelSelect(); showMenu('levelSelect'); });
-document.getElementById('btn-restart').addEventListener('click', () => { showLevelSelect(); showMenu('levelSelect'); });
-
 
 // --- Audio System ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let bgmInterval; let isBgmPlaying = false;
-let reverbBuffer = null;
-function generateReverb() {
-  let len = audioCtx.sampleRate * 2.0; 
-  reverbBuffer = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
-  for (let c = 0; c < 2; c++) {
-    let data = reverbBuffer.getChannelData(c);
-    for (let i = 0; i < len; i++) { data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
-  }
-}
-generateReverb();
-
-let altChargeOsc = null; let altChargeGain = null;
-function startPlasmaChargeSound() {
-  if (altChargeOsc || sfxVolume <= 0) return;
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  altChargeOsc = audioCtx.createOscillator(); altChargeGain = audioCtx.createGain();
-  altChargeOsc.type = 'sawtooth'; altChargeOsc.frequency.setValueAtTime(200, audioCtx.currentTime);
-  altChargeOsc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 1.5);
-  altChargeGain.gain.setValueAtTime(0.01 * sfxVolume, audioCtx.currentTime);
-  altChargeGain.gain.linearRampToValueAtTime(0.08 * sfxVolume, audioCtx.currentTime + 1.5);
-  altChargeOsc.connect(altChargeGain); altChargeGain.connect(audioCtx.destination);
-  altChargeOsc.start();
-}
-function stopPlasmaChargeSound() {
-  if (altChargeOsc) {
-    let now = audioCtx.currentTime;
-    altChargeGain.gain.cancelScheduledValues(now); altChargeGain.gain.setValueAtTime(altChargeGain.gain.value, now);
-    altChargeGain.gain.linearRampToValueAtTime(0, now + 0.05); altChargeOsc.stop(now + 0.05);
-    altChargeOsc = null; altChargeGain = null;
-  }
-}
 
 function startBGM() {
   if (isBgmPlaying) return; isBgmPlaying = true;
-  
-  // Driving retro Phrygian bassline (A, C, G, D, Bb)
-  const bass1 = [55.0, 55.0, 65.41, 55.0,  49.0, 55.0, 55.0, 55.0,  55.0, 55.0, 65.41, 55.0,  73.42, 65.41, 58.27, 55.0];
-  const arp1  = [110.0, 0, 130.81, 0,  164.81, 0, 146.83, 0,  110.0, 0, 130.81, 0,  174.61, 164.81, 146.83, 130.81];
-  
-  // Boss sequence: frantic, chromatic, chaotic
-  const bass2 = [49.0, 51.91, 55.0, 58.27,  61.74, 58.27, 55.0, 51.91,  49.0, 49.0, 65.41, 49.0,  73.42, 49.0, 58.27, 51.91];
-  const arp2  = [98.0, 103.83, 110.0, 116.54,  123.47, 116.54, 110.0, 103.83,  98.0, 0, 130.81, 0,  146.83, 0, 116.54, 103.83];
-
-  let step = 0;
+  const notes = [110, 110, 130, 146, 110, 110, 98, 82]; let step = 0;
   bgmInterval = setInterval(() => {
-    if (gameOver || gameWon || isPaused || inMenu || inUpgradeMenu || bgmVolume <= 0) return; 
-    let now = audioCtx.currentTime;
-    
-    let bassNotes = bossActive ? bass2 : bass1;
-    let arpNotes = bossActive ? arp2 : arp1;
-    
-    // Synthetic Retro Kick Drum (4-on-the-floor, double kick for boss)
-    if (step % 4 === 0 || (bossActive && step % 3 === 0)) {
-      const kOsc = audioCtx.createOscillator(); const kGain = audioCtx.createGain();
-      kOsc.type = 'sine'; kOsc.frequency.setValueAtTime(150, now); kOsc.frequency.exponentialRampToValueAtTime(10, now + 0.1);
-      kOsc.connect(kGain); kGain.connect(audioCtx.destination);
-      kGain.gain.setValueAtTime(0.04 * bgmVolume, now); kGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      kOsc.start(now); kOsc.stop(now + 0.1);
-    }
-
-    // Synthetic Retro Hi-Hat (upbeats)
-    if (step % 2 !== 0) {
-      const hOsc = audioCtx.createOscillator(); const hGain = audioCtx.createGain();
-      hOsc.type = 'square'; hOsc.frequency.setValueAtTime(8000, now); hOsc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-      hOsc.connect(hGain); hGain.connect(audioCtx.destination);
-      hGain.gain.setValueAtTime(0.01 * bgmVolume, now); hGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      hOsc.start(now); hOsc.stop(now + 0.05);
-    }
-
-    // Punchy 8-bit Bass (short staccato square wave)
-    const bassOsc = audioCtx.createOscillator();
-    const bassGain = audioCtx.createGain();
-    bassOsc.type = 'square'; 
-    bassOsc.frequency.setValueAtTime(bassNotes[step], now); 
-    bassOsc.connect(bassGain);
-    bassGain.connect(audioCtx.destination);
-    bassGain.gain.setValueAtTime(0.02 * bgmVolume, now);
-    bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    bassOsc.start(now);
-    bassOsc.stop(now + 0.1);
-
-    // Lead Arp / Melody
-    if (arpNotes[step] !== 0) {
-      const arpOsc = audioCtx.createOscillator();
-      const arpGain = audioCtx.createGain();
-      arpOsc.type = 'square';
-      arpOsc.frequency.setValueAtTime(arpNotes[step] * 2, now);
-      arpOsc.connect(arpGain);
-      arpGain.connect(audioCtx.destination);
-      arpGain.gain.setValueAtTime(0.015 * bgmVolume, now);
-      arpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-      arpOsc.start(now);
-      arpOsc.stop(now + 0.15);
-    }
-
-    step = (step + 1) % 16; 
-  }, 125); // Faster BPM: 125ms per step = 120 BPM driving tempo
+    if (gameOver || gameWon || isPaused || inMenu || inUpgradeMenu || bgmVolume === 0) return; 
+    const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+    osc.type = 'square'; osc.frequency.setValueAtTime(notes[step], audioCtx.currentTime);
+    osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+    gainNode.gain.setValueAtTime(0.015 * bgmVolume, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+    osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.15); step = (step + 1) % notes.length; 
+  }, 150); 
 }
 
-let menuBgmInterval; let isMenuBgmPlaying = false; let menuAudioNodes = [];
-
-function startMenuBGM() {
-  if (isMenuBgmPlaying) return; isMenuBgmPlaying = true;
-  if (bgmVolume <= 0) return;
-  
-  let now = audioCtx.currentTime;
-  let masterGain = audioCtx.createGain();
-  masterGain.gain.setValueAtTime(0, now);
-  masterGain.gain.linearRampToValueAtTime(0.04 * bgmVolume, now + 4.0); // 4 second fade in
-  masterGain.connect(audioCtx.destination);
-  
-  // Vangelis-style lush low-pass filter
-  let filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(300, now);
-  
-  if (reverbBuffer) {
-    const convolver = audioCtx.createConvolver();
-    convolver.buffer = reverbBuffer;
-    filter.connect(convolver);
-    convolver.connect(masterGain);
-  } else {
-    filter.connect(masterGain);
-  }
-  
-  // Drone Oscillators (C minor 9 spread)
-  const freqs = [65.41, 98.00, 155.56, 233.08]; // C2, G2, Eb3, Bb3
-  freqs.forEach((f, i) => {
-    let osc = audioCtx.createOscillator();
-    osc.type = i % 2 === 0 ? 'sawtooth' : 'triangle';
-    osc.frequency.setValueAtTime(f, now);
-    osc.detune.setValueAtTime(i * 5 - 7.5, now); // Analog drift/chorus detune
-    osc.connect(filter);
-    osc.start(now);
-    menuAudioNodes.push(osc);
-  });
-  
-  // LFO (Low Frequency Oscillator) to slowly sweep the filter cutoff (breathing pad)
-  let lfo = audioCtx.createOscillator();
-  lfo.type = 'sine';
-  lfo.frequency.setValueAtTime(0.05, now); // 20s sweeping cycle
-  let lfoGain = audioCtx.createGain();
-  lfoGain.gain.setValueAtTime(800, now); 
-  lfo.connect(lfoGain);
-  lfoGain.connect(filter.frequency);
-  lfo.start(now);
-  menuAudioNodes.push(lfo);
-  
-  menuAudioNodes.push(masterGain);
-  
-  // Ethereal lead twinkle sequence
-  const melody = [261.63, 311.13, 392.00, 466.16];
-  let step = 0;
-  menuBgmInterval = setInterval(() => {
-    if (bgmVolume <= 0 || audioCtx.state === 'suspended') return;
-    let time = audioCtx.currentTime;
-    let mOsc = audioCtx.createOscillator();
-    let mGain = audioCtx.createGain();
-    mOsc.type = 'sine';
-    mOsc.frequency.setValueAtTime(melody[step], time);
-    
-    if (reverbBuffer) {
-        const conv = audioCtx.createConvolver();
-        conv.buffer = reverbBuffer;
-        mOsc.connect(mGain); mGain.connect(conv); conv.connect(masterGain);
-    } else {
-        mOsc.connect(mGain); mGain.connect(masterGain);
-    }
-    
-    mGain.gain.setValueAtTime(0, time);
-    mGain.gain.linearRampToValueAtTime(0.02, time + 1.5);
-    mGain.gain.exponentialRampToValueAtTime(0.001, time + 5.0);
-    mOsc.start(time); mOsc.stop(time + 5.0);
-    
-    step = (step + 1) % melody.length;
-  }, 3000); 
-}
-
-function stopMenuBGM() {
-  if (!isMenuBgmPlaying) return;
-  isMenuBgmPlaying = false;
-  clearInterval(menuBgmInterval);
-  
-  if (menuAudioNodes.length > 0) {
-    let masterGain = menuAudioNodes[menuAudioNodes.length - 1];
-    let now = audioCtx.currentTime;
-    masterGain.gain.cancelScheduledValues(now);
-    masterGain.gain.setValueAtTime(masterGain.gain.value, now);
-    masterGain.gain.linearRampToValueAtTime(0, now + 1.0); // 1s smooth fade out
-    
-    setTimeout(() => {
-      menuAudioNodes.forEach(node => {
-        if (node.stop) { try { node.stop(); } catch(e){} }
-        if (node.disconnect) node.disconnect();
-      });
-      menuAudioNodes = [];
-    }, 1100);
-  }
-}
-startMenuBGM();
-
-function playSound(type, pitchMult = 1.0) {
+function playSound(type) {
   if (sfxVolume <= 0) return; if (audioCtx.state === 'suspended') audioCtx.resume();
-  const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); const now = audioCtx.currentTime;
-  if (type === 'bossDeath') {
-    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(10, now + 1.5);
-    const convolver = audioCtx.createConvolver(); convolver.buffer = reverbBuffer;
-    osc.connect(convolver); convolver.connect(gainNode); gainNode.connect(audioCtx.destination);
-    gainNode.gain.setValueAtTime(0.5 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 1.5);
-    osc.start(now); osc.stop(now + 1.5); return;
-  }
-  osc.connect(gainNode); gainNode.connect(audioCtx.destination); 
-  if (type === 'shoot') { osc.type = 'square'; osc.frequency.setValueAtTime(880 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(110 * pitchMult, now + 0.1); gainNode.gain.setValueAtTime(0.05 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.1); gainNode.gain.linearRampToValueAtTime(0, now + 0.15); osc.start(now); osc.stop(now + 0.15); } 
-  else if (type === 'enemyShoot') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(440 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(55 * pitchMult, now + 0.15); gainNode.gain.setValueAtTime(0.05 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.15); gainNode.gain.linearRampToValueAtTime(0, now + 0.2); osc.start(now); osc.stop(now + 0.2); } 
-  else if (type === 'hit') { osc.type = 'triangle'; osc.frequency.setValueAtTime(150 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(40 * pitchMult, now + 0.2); gainNode.gain.setValueAtTime(0.3 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.2); gainNode.gain.linearRampToValueAtTime(0, now + 0.25); osc.start(now); osc.stop(now + 0.25); } 
-  else if (type === 'explode') { osc.type = 'square'; osc.frequency.setValueAtTime(100 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(10 * pitchMult, now + 0.3); gainNode.gain.setValueAtTime(0.15 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.3); gainNode.gain.linearRampToValueAtTime(0, now + 0.35); osc.start(now); osc.stop(now + 0.35); } 
-  else if (type === 'levelup') { osc.type = 'square'; osc.frequency.setValueAtTime(440 * pitchMult, now); osc.frequency.setValueAtTime(554 * pitchMult, now + 0.1); osc.frequency.setValueAtTime(659 * pitchMult, now + 0.2); gainNode.gain.setValueAtTime(0.1 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.4); osc.start(now); osc.stop(now + 0.4); } 
-  else if (type === 'fanfare') { osc.type = 'square'; osc.frequency.setValueAtTime(440, now); osc.frequency.setValueAtTime(554, now + 0.1); osc.frequency.setValueAtTime(659, now + 0.2); gainNode.gain.setValueAtTime(0.1 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.4); osc.start(now); osc.stop(now + 0.4); }
-  else if (type === 'bossWarning') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(120, now); osc.frequency.linearRampToValueAtTime(55, now + 1.5); gainNode.gain.setValueAtTime(0.2 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 1.5); osc.start(now); osc.stop(now + 1.5); } 
-  else if (type === 'bossHit') { osc.type = 'square'; osc.frequency.setValueAtTime(80 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(20 * pitchMult, now + 0.1); gainNode.gain.setValueAtTime(0.2 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.1); osc.start(now); osc.stop(now + 0.1); }
-  else if (type === 'coin') { osc.type = 'sine'; osc.frequency.setValueAtTime(1047 * pitchMult, now); osc.frequency.setValueAtTime(1319 * pitchMult, now + 0.06); gainNode.gain.setValueAtTime(0.07 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.18); gainNode.gain.linearRampToValueAtTime(0, now + 0.2); osc.start(now); osc.stop(now + 0.2); }
-  else if (type === 'altCharge') { /* removed, handled by continuous synth */ }
-  else if (type === 'hover') { 
-    // High-tech holographic laser chirp
-    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(3000 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(6000 * pitchMult, now + 0.04); 
-    gainNode.gain.setValueAtTime(0.015 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.04); 
-    osc.start(now); osc.stop(now + 0.04); 
-  }
-  else if (type === 'click') { 
-    // Digital confirmation chirp
-    osc.type = 'square'; osc.frequency.setValueAtTime(2500 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(400 * pitchMult, now + 0.08); 
-    gainNode.gain.setValueAtTime(0.04 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08); 
-    osc.start(now); osc.stop(now + 0.08); 
-    
-    // Low mechanical locking thud
-    let subOsc = audioCtx.createOscillator(); let subGain = audioCtx.createGain();
-    subOsc.type = 'sine'; subOsc.frequency.setValueAtTime(200, now); subOsc.frequency.exponentialRampToValueAtTime(20, now + 0.15);
-    subOsc.connect(subGain); subGain.connect(audioCtx.destination);
-    subGain.gain.setValueAtTime(0.12 * sfxVolume, now); subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-    subOsc.start(now); subOsc.stop(now + 0.15);
-  }
-  else if (type === 'altFire') { osc.type = 'sine'; osc.frequency.setValueAtTime(600 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(60 * pitchMult, now + 0.5); gainNode.gain.setValueAtTime(0.3 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5); osc.start(now); osc.stop(now + 0.5); }
-  else if (type === 'altExplode') { osc.type = 'square'; osc.frequency.setValueAtTime(200 * pitchMult, now); osc.frequency.exponentialRampToValueAtTime(20 * pitchMult, now + 0.4); gainNode.gain.setValueAtTime(0.35 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4); osc.start(now); osc.stop(now + 0.4); }
+  const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+  osc.connect(gainNode); gainNode.connect(audioCtx.destination); const now = audioCtx.currentTime;
+  if (type === 'shoot') { osc.type = 'square'; osc.frequency.setValueAtTime(880, now); osc.frequency.exponentialRampToValueAtTime(110, now + 0.1); gainNode.gain.setValueAtTime(0.05 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.1); gainNode.gain.linearRampToValueAtTime(0, now + 0.15); osc.start(now); osc.stop(now + 0.15); } 
+  else if (type === 'enemyShoot') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(440, now); osc.frequency.exponentialRampToValueAtTime(55, now + 0.15); gainNode.gain.setValueAtTime(0.05 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.15); gainNode.gain.linearRampToValueAtTime(0, now + 0.2); osc.start(now); osc.stop(now + 0.2); } 
+  else if (type === 'hit') { osc.type = 'triangle'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.2); gainNode.gain.setValueAtTime(0.3 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.2); gainNode.gain.linearRampToValueAtTime(0, now + 0.25); osc.start(now); osc.stop(now + 0.25); } 
+  else if (type === 'explode') { osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + 0.3); gainNode.gain.setValueAtTime(0.15 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.3); gainNode.gain.linearRampToValueAtTime(0, now + 0.35); osc.start(now); osc.stop(now + 0.35); } 
+  else if (type === 'levelup') { osc.type = 'square'; osc.frequency.setValueAtTime(440, now); osc.frequency.setValueAtTime(554, now + 0.1); osc.frequency.setValueAtTime(659, now + 0.2); gainNode.gain.setValueAtTime(0.1 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.4); osc.start(now); osc.stop(now + 0.4); } 
+  else if (type === 'bossWarning') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.linearRampToValueAtTime(150, now + 0.5); osc.frequency.linearRampToValueAtTime(100, now + 1.0); gainNode.gain.setValueAtTime(0.15 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 1.0); osc.start(now); osc.stop(now + 1.0); } 
+  else if (type === 'bossHit') { osc.type = 'square'; osc.frequency.setValueAtTime(80, now); osc.frequency.exponentialRampToValueAtTime(20, now + 0.1); gainNode.gain.setValueAtTime(0.2 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01 * sfxVolume, now + 0.1); osc.start(now); osc.stop(now + 0.1); }
+  else if (type === 'coin') { osc.type = 'sine'; osc.frequency.setValueAtTime(1047, now); osc.frequency.setValueAtTime(1319, now + 0.06); gainNode.gain.setValueAtTime(0.07 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.18); gainNode.gain.linearRampToValueAtTime(0, now + 0.2); osc.start(now); osc.stop(now + 0.2); }
+  else if (type === 'altCharge') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, now); osc.frequency.exponentialRampToValueAtTime(400, now + 0.3); gainNode.gain.setValueAtTime(0.04 * sfxVolume, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.3); osc.start(now); osc.stop(now + 0.3); }
+  else if (type === 'altFire') { osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(60, now + 0.5); gainNode.gain.setValueAtTime(0.3 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5); osc.start(now); osc.stop(now + 0.5); }
+  else if (type === 'altExplode') { osc.type = 'square'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(20, now + 0.4); gainNode.gain.setValueAtTime(0.35 * sfxVolume, now); gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4); osc.start(now); osc.stop(now + 0.4); }
 }
 
 // --- Game State Variables ---
@@ -333,9 +135,7 @@ let firing = false; let inMenu = true; let isPaused = false; let gameOver = fals
 let altFiring = false; let altChargeTime = 0; let altCooldown = 0; let altBombs = [];
 const ALT_COOLDOWN_MAX = 1800; // 30 seconds at 60fps
 const ALT_CHARGE_MAX  = 90;  // 1.5 seconds full charge
-let player;
-let bullets = []; let enemies = []; let enemyBullets = []; let stars = []; 
-let particles = []; let powerups = []; let coinPickups = [];
+let player, bullets, enemies, enemyBullets, stars, particles, powerups, coinPickups;
 let health, score, currentLevel, nextBossScore; let bossActive = false; let boss = null;
 let joystick = { active: false, dx: 0, dy: 0, touchId: null };
 
@@ -343,41 +143,15 @@ let playerStats = { maxHealth: 500, weaponLevel: 0, drones: 0, missiles: 0, tesl
 let activeTeslaArcs = []; 
 const bossNames = ["GOLIATH CRUISER", "SWARM HIVE", "PULSAR STAR", "GEMINI SYSTEM", "NEXUS CORE", "VOID SINGULARITY", "PRISM WEAVER", "PHANTOM SWARM", "SIEGE ENGINE", "OMEGA ARCHON"];
 
-// --- Juice Variables ---
-let playerTrail = []; let shockwaves = []; let comboTexts = [];
-let lastKillTime = 0; let killStreak = 0; let hitstopFrames = 0;
-let slowMo = false; let slowMoTimer = 0; let waveClearedFanfarePlayed = false;
-let oldScore = 0;
-
-function notify(msg) {
-  let feed = document.getElementById('killfeed'); if(!feed) return;
-  let el = document.createElement('div'); el.className = 'kf-item'; el.innerText = msg;
-  feed.appendChild(el); setTimeout(() => el.remove(), 2500);
-}
-
-function spawnDamageNumber(x, y, amount, type = 'normal') {
-  let container = document.getElementById('damage-container'); if(!container) return;
-  let el = document.createElement('div'); el.className = 'dmg-num'; el.innerText = amount;
-  el.style.left = x + 'px'; el.style.top = y + 'px';
-  if (type === 'crit') el.style.color = '#ffcc00'; else if (type === 'player') el.style.color = '#ff4444'; else el.style.color = '#ffffff';
-  container.appendChild(el); setTimeout(() => el.remove(), 800);
-}
-
-function playerHit(damage) {
-  if (godMode) return;
-  health -= damage; hitstopFrames = 3; triggerShake(10, 5); createExplosion(player.x, player.y, "cyan", 8);
-  spawnDamageNumber(player.x, player.y, damage, 'player'); playSound('hit'); updateUI();
-  try { let gp = navigator.getGamepads()[0]; if (gp && gp.vibrationActuator) { gp.vibrationActuator.playEffect("dual-rumble", { startDelay: 0, duration: 150, weakMagnitude: 0.8, strongMagnitude: 1.0 }); } } catch(e) {}
-}
-
 let shakeDuration = 0; let shakeIntensity = 0;
 function triggerShake(duration, intensity) { if (!postFX.shake) return; shakeDuration = duration; shakeIntensity = intensity; }
 
 function createExplosion(x, y, color, count, speedModifier = 1) {
-  for(let i=0; i<8; i++){ let a = Math.random() * Math.PI * 2; let s = (Math.random() * 4 + 8) * speedModifier; particles.push({ x, y, dx: Math.cos(a)*s, dy: Math.sin(a)*s, radius: Math.random()*2+1, color: (Math.random()>0.5?"white":"yellow"), life: 1.0, decay: 0.1 }); }
-  for(let i=0; i<5; i++){ let a = Math.random() * Math.PI * 2; let s = (Math.random() * 2 + 4) * speedModifier; particles.push({ x, y, dx: Math.cos(a)*s, dy: Math.sin(a)*s, radius: Math.random()*3+2, color: color, life: 1.0, decay: 0.04 }); }
-  for(let i=0; i<3; i++){ let a = Math.random() * Math.PI * 2; let s = (Math.random() * 1 + 1) * speedModifier; particles.push({ x, y, dx: Math.cos(a)*s, dy: Math.sin(a)*s, radius: Math.random()*5+4, color: "#333", life: 0.5, decay: 0.025 }); }
-  shockwaves.push({ x, y, r: 0, maxR: 40 * speedModifier, alpha: 0.6 });
+  let actualCount = Math.min(count, 10); 
+  for(let i=0; i<actualCount; i++){
+    let angle = Math.random() * Math.PI * 2; let speed = (Math.random() * 4 + 1) * speedModifier;
+    particles.push({ x: x, y: y, dx: Math.cos(angle)*speed, dy: Math.sin(angle)*speed, radius: Math.random() * 3 + 1, color: color, life: 1.0, decay: Math.random() * 0.05 + 0.02 });
+  }
 }
 
 // --- Coin Drop System ---
@@ -445,24 +219,6 @@ function fireAltBomb() {
   triggerShake(8, 4);
 }
 
-function killEnemy(e) {
-  score += (e.type === 8 ? 50 : (e.type === 7 ? 40 : 10));
-  let now = Date.now();
-  if (now - lastKillTime < 1500) killStreak++; else killStreak = 1;
-  lastKillTime = now;
-  if (killStreak >= 2) comboTexts.push({ text: 'x' + killStreak + ' COMBO', x: player.x, y: player.y - 40, life: 45, maxLife: 45, streak: killStreak });
-  
-  let pitch = 1 + (killStreak * 0.08); playSound('explode', pitch);
-  let sSize = e.type === 7 || e.type === 8 ? 8 : (e.type === 4 || e.type === 5 ? 5 : 3);
-  let sInt = e.type === 7 || e.type === 8 ? 6 : (e.type === 4 || e.type === 5 ? 4 : 2);
-  triggerShake(sSize, sInt);
-  
-  createExplosion(e.x, e.y, "orange", 10); if (e.type >= 4) createExplosion(e.x, e.y, "red", 5);
-  dropCoins(e.x, e.y, e.type);
-  if (e.type === 7) { for(let k=0; k<3; k++) enemies.push({x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1}); }
-  if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI(); 
-}
-
 function detonateAltBomb(bomb) {
   playSound('altExplode');
   triggerShake(20, 8);
@@ -476,18 +232,23 @@ function detonateAltBomb(bomb) {
     if (Math.hypot(e.x - bomb.x, e.y - bomb.y) <= bomb.blastR) {
       e.hp -= Math.ceil(bomb.damage);
       if (e.hp <= 0) {
-        killEnemy(e);
+        score += (e.type === 8 ? 50 : (e.type === 7 ? 40 : 10));
+        dropCoins(e.x, e.y, e.type);
+        createExplosion(e.x, e.y, "orange", 10);
+        if (e.type === 7) {
+          for (let k = 0; k < 3; k++)
+            enemies.push({ x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1 });
+        }
         enemies.splice(i, 1);
+        if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI();
       } else {
-        e.hitFlash = 3;
         createExplosion(e.x, e.y, "white", 5);
-        spawnDamageNumber(e.x, e.y, Math.ceil(bomb.damage));
       }
     }
   }
   // Damage boss
   if (bossActive && boss && Math.hypot(boss.x - bomb.x, boss.y - bomb.y) <= bomb.blastR + boss.width/2) {
-    damageBoss(Math.ceil(bomb.damage), bomb.x, bomb.y);
+    damageBoss(Math.ceil(bomb.damage));
   }
 }
 
@@ -662,18 +423,16 @@ function showLevelSelect() {
 
 function spawnBoss() {
   bossActive = true; clearInterval(spawnTimer);
-  playSound('bossWarning'); triggerShake(60, 5); 
+  playSound('bossWarning'); setTimeout(() => playSound('bossWarning'), 1000); triggerShake(60, 5); 
   let speedMod = difficulty === 'easy' ? 0.55 : (difficulty === 'normal' ? 0.85 : 1.1);
   let bossMaxHp = (difficulty === 'easy' ? 600 : (difficulty === 'normal' ? 900 : 1200)) + (currentLevel * 400);
   
   let bossType = currentLevel % 10; 
-  notify("WARNING: " + bossNames[bossType] + " DETECTED");
   
   boss = { 
     x: c.width / 2, y: -150, targetY: 120, width: 200, height: 140, 
     hp: bossMaxHp, maxHp: bossMaxHp, speed: (1.5 + (currentLevel * 0.2)) * speedMod, direction: 1, 
-    attackTimer: 0, spiral: 0, angle: 0, type: bossType, state: 0, phantoms: [],
-    dying: false, deathTimer: 0
+    attackTimer: 0, spiral: 0, angle: 0, type: bossType, state: 0, phantoms: [] 
   };
   
   if (bossType === 7) { 
@@ -760,22 +519,21 @@ function applyDifficultyTimers() {
 
 // selectedLevel = which level index (0-based) to start on
 function startGame(selectedLevel) {
-  stopMenuBGM();
-
   let startLevel = (typeof selectedLevel === 'number') ? selectedLevel : 0;
 
   player = {x:c.width/2, y:c.height/2, angle:0};
   // Apply persistent shop upgrades
   let baseHP = 200 + (shopData.hullPlating * 50);
   playerStats = {
-    maxHealth: baseHP, weaponLevel: shopData.weaponLevel, drones: shopData.drones,
-    missiles: shopData.missiles, tesla: 0, shields: shopData.shields, inverted: false
+    maxHealth: baseHP,
+    weaponLevel: shopData.weaponLevel,
+    drones: shopData.drones,
+    missiles: shopData.missiles,
+    tesla: 0,
+    shields: shopData.shields,
+    inverted: false
   };
   bullets = []; enemies = []; enemyBullets = []; particles = []; powerups = []; coinPickups = []; altBombs = [];
-  playerTrail = []; shockwaves = []; comboTexts = [];
-  lastKillTime = 0; killStreak = 0; hitstopFrames = 0;
-  slowMo = false; slowMoTimer = 0; waveClearedFanfarePlayed = false; oldScore = 0;
-
   health = playerStats.maxHealth;
   score = 0; altChargeTime = 0; altCooldown = 0; altFiring = false; fireCooldown = 0;
   score = 0; currentLevel = startLevel; nextBossScore = 500 + (startLevel * 200); bossActive = false; boss = null; godMode = false;
@@ -787,9 +545,8 @@ function startGame(selectedLevel) {
   document.getElementById('game-over-screen').style.borderColor = "red";
   document.getElementById('btn-restart').innerText = "REBOOT SYSTEM";
 
-  hideAllMenus();
-  menus.hud.classList.add('active');
-  if (isTouchDevice) menus.mobileControls.classList.add('active');
+  Object.values(menus).forEach(m => m.style.display = 'none'); menus.hud.style.display = "flex";
+  if (isTouchDevice) menus.mobileControls.style.display = "flex";
   updateUI(); if (audioCtx.state === 'suspended') audioCtx.resume(); startBGM(); applyDifficultyTimers();
 }
 
@@ -800,24 +557,10 @@ function triggerVictory() {
   saveProgress();
   setTimeout(() => { triggerLevelUp(); }, 2000);
 }
-function returnToMenu() { 
-  inMenu = true; isPaused = false; shakeDuration = 0;
-  menus.hud.classList.remove('active');
-  menus.mobileControls.classList.remove('active');
-  showMenu('main'); 
-  clearInterval(bgmInterval); isBgmPlaying = false; 
-  startMenuBGM();
-}
+function returnToMenu() { inMenu = true; isPaused = false; Object.values(menus).forEach(m => m.style.display = 'none'); menus.main.style.display = "flex"; clearInterval(bgmInterval); isBgmPlaying = false; }
 function togglePause() {
   if(inMenu || gameOver || gameWon || inUpgradeMenu) return; isPaused = !isPaused;
-  if (isPaused) { 
-    menus.pause.classList.add('active'); 
-    menus.pause.classList.add('flicker-anim');
-    if(audioCtx.state === 'running') audioCtx.suspend(); 
-  } else { 
-    menus.pause.classList.remove('active'); 
-    if(audioCtx.state === 'suspended') audioCtx.resume(); 
-  }
+  if (isPaused) { menus.pause.style.display = "flex"; if(audioCtx.state === 'running') audioCtx.suspend(); } else { menus.pause.style.display = "none"; if(audioCtx.state === 'suspended') audioCtx.resume(); }
 }
 function triggerGameOver() {
   gameOver = true; triggerShake(30, 10);
@@ -826,19 +569,12 @@ function triggerGameOver() {
   document.getElementById('final-score').innerText = score;
   document.getElementById('go-highscore').innerText = highScore;
   document.getElementById('go-level').innerText = (currentLevel + 1);
-  showMenu('gameOver'); clearInterval(bgmInterval); isBgmPlaying = false;
-  startMenuBGM();
+  menus.hud.style.display = "none"; menus.mobileControls.style.display = "none"; menus.gameOver.style.display = "flex"; clearInterval(bgmInterval); isBgmPlaying = false;
 }
 
 function updateUI() {
   document.getElementById('score-display').innerText = "SCORE: " + score;
   document.getElementById('coin-display').innerText = "⬡ " + coins + " CREDITS";
-
-  if (score > oldScore) {
-    let sd = document.getElementById('score-display');
-    sd.classList.remove('score-flash'); void sd.offsetWidth; sd.classList.add('score-flash');
-    oldScore = score;
-  }
 
   let highScore = parseInt(localStorage.getItem("highScore")) || 0;
   if (score > highScore) { highScore = score; localStorage.setItem("highScore", highScore); }
@@ -871,12 +607,10 @@ function updateUI() {
     bossBarEl.style.width = "100%";
     bossScoreEl.innerText = nextBossScore + " / " + nextBossScore;
     if (bossLabelEl) { bossLabelEl.innerText = "⚠ BOSS ACTIVE"; bossLabelEl.style.color = "red"; }
-    if (boss && boss.hp / boss.maxHp < 0.3) bossBarEl.classList.add('boss-bar-danger'); else bossBarEl.classList.remove('boss-bar-danger');
   } else {
     let pct = Math.min(100, (score / nextBossScore) * 100);
     bossBarEl.style.width = pct + "%";
     bossScoreEl.innerText = score + " / " + nextBossScore;
-    bossBarEl.classList.remove('boss-bar-danger');
     if (bossLabelEl) { bossLabelEl.innerText = "BOSS INCOMING"; bossLabelEl.style.color = ""; }
   }
 
@@ -890,7 +624,6 @@ function updateUI() {
   else if (godMode) { hBar.style.background = "magenta"; hBox.style.borderColor = "magenta"; hLabel.style.color = "magenta"; hLabel.innerText = "GOD MODE ACTIVE"; }
   else {
     hLabel.innerText = "SYSTEM INTEGRITY";
-    if (health >= playerStats.maxHealth) hBar.classList.add('health-full'); else hBar.classList.remove('health-full');
     if (healthPercent > 50) { hBar.style.background = "cyan"; hBar.style.boxShadow = "0 0 10px cyan"; hBox.style.borderColor = "cyan"; hLabel.style.color = "cyan"; }
     else if (healthPercent > 25) { hBar.style.background = "yellow"; hBar.style.boxShadow = "0 0 10px yellow"; hBox.style.borderColor = "yellow"; hLabel.style.color = "yellow"; }
     else { hBar.style.background = "red"; hBar.style.boxShadow = "0 0 10px red"; hBox.style.borderColor = "red"; hLabel.style.color = "red"; hBox.classList.add('health-critical'); }
@@ -935,43 +668,7 @@ window.addEventListener("keyup", (e) => {
   }
 });
 
-addEventListener("mousemove", e=>{ 
-  mouse.x = e.clientX; mouse.y = e.clientY; 
-  if (inMenu || isPaused || gameOver || gameWon || inUpgradeMenu) {
-    let activeMenu = document.querySelector('.menu-screen.active');
-    if (activeMenu) {
-      let rect = activeMenu.getBoundingClientRect();
-      let centerX = rect.left + rect.width / 2;
-      let centerY = rect.top + rect.height / 2;
-      let percentX = (e.clientX - centerX) / (rect.width / 2);
-      let percentY = (e.clientY - centerY) / (rect.height / 2);
-      percentX = Math.max(-1, Math.min(1, percentX));
-      percentY = Math.max(-1, Math.min(1, percentY));
-      menuTilt.targetX = -percentY * 12; 
-      menuTilt.targetY = percentX * 12;
-      
-      let glare = activeMenu.querySelector('.glare');
-      if (glare) {
-         let glX = (percentX + 1) * 50; 
-         let glY = (percentY + 1) * 50;
-         glare.style.background = `radial-gradient(circle at ${glX}% ${glY}%, rgba(0, 255, 255, 0.15) 0%, transparent 60%)`;
-      }
-      activeMenu.style.setProperty('--px', `${percentX * -8}px`);
-      activeMenu.style.setProperty('--py', `${percentY * -8}px`);
-    }
-  }
-});
-window.addEventListener("mouseout", (e) => {
-  menuTilt.targetX = 0; menuTilt.targetY = 0;
-  let activeMenu = document.querySelector('.menu-screen.active');
-  if (activeMenu) {
-    activeMenu.style.setProperty('--px', `0px`);
-    activeMenu.style.setProperty('--py', `0px`);
-    let glare = activeMenu.querySelector('.glare');
-    if (glare) glare.style.background = `radial-gradient(circle at 50% 50%, rgba(0, 255, 255, 0) 0%, transparent 60%)`;
-  }
-});
-
+addEventListener("mousemove", e=>{ mouse.x = e.clientX; mouse.y = e.clientY; });
 window.addEventListener("mousedown", (e)=> {
   if (e.target.id === "c") {
     if (e.button === 0) firing = true;
@@ -985,22 +682,6 @@ window.addEventListener("mouseup", (e)=> {
 window.addEventListener("contextmenu", (e)=> { if (e.target.id === "c") e.preventDefault(); });
 
 const joyBase = document.getElementById('joystick-base'); const joyStick = document.getElementById('joystick-stick'); const fireBtn = document.getElementById('btn-fire'); const plasmaBtn = document.getElementById('btn-plasma');
-
-// UI Sound Effects Listeners
-document.addEventListener('mouseover', (e) => {
-  let btn = e.target.closest('button, .main-btn, .shop-card, .level-card');
-  if (btn) {
-    if (!e.relatedTarget || !btn.contains(e.relatedTarget)) {
-      playSound('hover');
-    }
-  }
-});
-document.addEventListener('mousedown', (e) => {
-  let btn = e.target.closest('button, .main-btn, .shop-card, .level-card');
-  if (btn) {
-    playSound('click');
-  }
-});
 joyBase.addEventListener('touchstart', (e) => { e.preventDefault(); if (joystick.touchId !== null) return; let touch = e.changedTouches[0]; joystick.touchId = touch.identifier; updateJoystickVector(touch); }, {passive: false});
 joyBase.addEventListener('touchmove', (e) => { e.preventDefault(); for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === joystick.touchId) updateJoystickVector(e.changedTouches[i]); } }, {passive: false});
 const resetJoystick = (e) => { e.preventDefault(); for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === joystick.touchId) { joystick.touchId = null; joystick.active = false; joystick.dx = 0; joystick.dy = 0; joyStick.style.transform = `translate(0px, 0px)`; } } };
@@ -1047,78 +728,21 @@ let droneTick = 0; let missileTick = 0; let fireCooldown = 0;
 // Higher weapon level = more bullets so slower cadence
 const FIRE_RATES = [12, 16, 22, 30]; // wep0→wep3: 12f/16f/22f/30f at 60fps
 
-function updateVisuals() {
-  stars.forEach(s => { 
-    let mult = s.layer === 0 ? 0.4 : (s.layer === 1 ? 1.0 : 2.0);
-    s.y += s.speed * mult; 
-    if (s.y > c.height) { s.y = 0; s.x = Math.random() * c.width; } 
-  });
-  if (Math.random() < 0.002) particles.push({x: Math.random()*c.width, y: 0, dx: -15, dy: 15, radius: 2, color: 'white', life: 1.0, decay: 0.02});
-  
-  for(let i=particles.length-1; i>=0; i--){
-    let p = particles[i]; p.x += p.dx; p.y += p.dy; p.life -= p.decay;
-    if(p.life <= 0) particles.splice(i, 1);
-  }
-  for(let i=shockwaves.length-1; i>=0; i--){
-    let sw = shockwaves[i]; sw.r += sw.maxR / 15; sw.alpha -= 0.6 / 15;
-    if(sw.alpha <= 0) shockwaves.splice(i, 1);
-  }
-  for(let i=comboTexts.length-1; i>=0; i--){
-    let ct = comboTexts[i]; ct.life--;
-    if(ct.life <= 0) comboTexts.splice(i, 1);
-  }
-}
-
 // --- Game Loop ---
 function update(){
-  if (hitstopFrames > 0) { hitstopFrames--; return; }
-  if (shakeDuration > 0) shakeDuration--;
-
-  if (inMenu || isPaused || gameOver || gameWon || inUpgradeMenu) {
-    let activeMenu = document.querySelector('.menu-screen.active');
-    if (activeMenu) {
-      menuTilt.x += (menuTilt.targetX - menuTilt.x) * 0.15;
-      menuTilt.y += (menuTilt.targetY - menuTilt.y) * 0.15;
-      let time = Date.now() / 1000;
-      let floatY = Math.sin(time * 2) * -8; 
-      activeMenu.style.transform = `translate(-50%, -50%) translateY(${floatY}px) rotateX(${menuTilt.x}deg) rotateY(${menuTilt.y}deg)`;
-    }
-  }
-
-  if (!isPaused && !inUpgradeMenu) {
-    if (slowMoTimer > 0) {
-      slowMoTimer--; updateVisuals();
-      if (slowMoTimer <= 0) slowMo = false;
-    } else {
-      updateVisuals();
-    }
-  }
-
+  activeTeslaArcs = []; 
+  stars.forEach(s => { s.y += s.speed; if (s.y > c.height) { s.y = 0; s.x = Math.random() * c.width; } });
   if(gameOver || gameWon || inMenu || isPaused || inUpgradeMenu) return;
 
-  if (slowMoTimer > 0 && slowMoTimer % 3 !== 0) return;
-
-  activeTeslaArcs = []; 
-  
+  if (shakeDuration > 0) shakeDuration--;
   if (sectorClearedTimer > 0) sectorClearedTimer--;
   if (altCooldown > 0) { altCooldown--; if (altCooldown % 60 === 0) updateUI(); }
 
   // Alt-fire charge accumulation
   if (altFiring && altCooldown === 0 && !gameOver && !gameWon && !isPaused && !inMenu) {
-    if (altChargeTime === 0) startPlasmaChargeSound();
+    if (altChargeTime === 0) playSound('altCharge');
     altChargeTime = Math.min(altChargeTime + 1, ALT_CHARGE_MAX);
-  } else {
-    stopPlasmaChargeSound();
   }
-
-  // Wave Clear Fanfare
-  if (enemies.length === 0 && !bossActive) {
-    if (!waveClearedFanfarePlayed && score > 0 && spawnTimer) { playSound('fanfare'); waveClearedFanfarePlayed = true; }
-  } else { waveClearedFanfarePlayed = false; }
-  
-  // Player Trail
-  playerTrail.unshift({x: player.x, y: player.y});
-  if (playerTrail.length > 14) playerTrail.pop();
 
   // --- Player firing (frame-based, rate varies by weapon level + difficulty) ---
   if (fireCooldown > 0) fireCooldown--;
@@ -1195,6 +819,11 @@ function update(){
   if (enemyBullets.length > 150) enemyBullets.splice(0, enemyBullets.length - 150);
   if (bullets.length > 100) bullets.splice(0, bullets.length - 100);
 
+  for(let i = particles.length - 1; i >= 0; i--){
+    let p = particles[i]; p.x += p.dx; p.y += p.dy; p.life -= p.decay;
+    if(p.life <= 0) particles.splice(i, 1);
+  }
+
   // PLAYER MOVEMENT
   let inv = playerStats.inverted ? -1 : 1;
   if (joystick.active) {
@@ -1223,9 +852,7 @@ function update(){
     let p = powerups[i]; p.y += 1.5; 
     if (Math.random() > 0.7) particles.push({ x: p.x + (Math.random()-0.5)*10, y: p.y, dx: 0, dy: 0, radius: 2, color: "lime", life: 1.0, decay: 0.1 });
     if (Math.hypot(player.x - p.x, player.y - p.y) < p.radius + 15) { 
-        health = Math.min(playerStats.maxHealth, health + 50); updateUI(); playSound('levelup'); createExplosion(p.x, p.y, "lime", 15, 2); 
-        spawnDamageNumber(player.x, player.y, '+50', 'crit');
-        powerups.splice(i, 1); continue;
+        health = Math.min(playerStats.maxHealth, health + 50); updateUI(); playSound('levelup'); createExplosion(p.x, p.y, "lime", 15, 2); powerups.splice(i, 1); continue;
     }
     if (p.y > c.height + 30) powerups.splice(i, 1);
   }
@@ -1274,47 +901,16 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
     }
 
     if( b.x > player.x-15 && b.x < player.x+15 && b.y > player.y-15 && b.y < player.y+15 ){
-      playerHit(10); return false; 
+      if (!godMode) health -= 10; 
+      playSound('hit'); triggerShake(10, 4); createExplosion(player.x, player.y, "cyan", 8); updateUI(); return false; 
     }
     return b.x>0 && b.x<c.width && b.y>0 && b.y<c.height;
   });
 
   // --- ALL 10 BOSS MECHANICS ---
   if (bossActive && boss) {
-    if (boss.dying) {
-        slowMo = true;
-        slowMoTimer = 90;
-        boss.deathTimer--;
-        
-        if (boss.deathTimer % 5 === 0) {
-            let intensity = 5 + ((90 - boss.deathTimer) / 3);
-            triggerShake(8, intensity);
-        }
-        if (boss.deathTimer % 12 === 0) {
-            createExplosion(boss.x + (Math.random()-0.5)*boss.width, boss.y + (Math.random()-0.5)*boss.height, "orange", 20, 2);
-            playSound('hit');
-        }
-        if (boss.deathTimer % 3 === 0) {
-            particles.push({x: boss.x + (Math.random()-0.5)*boss.width, y: boss.y + (Math.random()-0.5)*boss.height, dx: (Math.random()-0.5)*15, dy: (Math.random()-0.5)*15, radius: Math.random()*6+3, color: "gray", life: 1.0, decay: 0.02});
-        }
-        if (boss.deathTimer === 30) { 
-            shockwaves.push({x: boss.x, y: boss.y, r: 0, maxR: 300, alpha: 0.8});
-            playSound('bossDeath'); 
-        }
-        if (boss.deathTimer <= 0) {
-            bossActive = false; score += 500; triggerShake(60, 20); 
-            createExplosion(boss.x, boss.y, "magenta", 50, 4); createExplosion(boss.x, boss.y, "orange", 50, 5); 
-            powerups.push({ x: boss.x, y: boss.y, radius: 15 });
-            dropBossCoins(boss.x, boss.y, currentLevel);
-            if (currentLevel >= unlockedLevel) {
-                unlockedLevel = currentLevel + 1;
-                localStorage.setItem("unlockedLevel", unlockedLevel);
-            }
-            boss = null; triggerVictory(); 
-        }
-    } else {
-        if (boss.y < boss.targetY) { boss.y += 1.5; } 
-        else {
+    if (boss.y < boss.targetY) { boss.y += 1.5; } 
+    else {
       boss.x += boss.speed * boss.direction;
       if (boss.x + boss.width/2 > c.width - 20 || boss.x - boss.width/2 < 20) boss.direction *= -1;
       
@@ -1392,7 +988,6 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
               break;
       }
     }
-   } // end boss.dying else
   }
 
   // Moved damageBoss OUTSIDE of update() inner scope — defined at module level below
@@ -1456,7 +1051,13 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
             let sa = (Date.now() / 600) + (Math.PI*2 / playerStats.shields) * i; let sx = player.x + Math.cos(sa)*60; let sy = player.y + Math.sin(sa)*60;
             if (Math.hypot(e.x - sx, e.y - sy) < 25) { 
                 e.hp -= 5; playerStats.shields--; createExplosion(sx, sy, "cyan", 10); playSound('hit'); triggerShake(5, 3);
-                if (e.hp <= 0) { killEnemy(e); return false; } else { e.hitFlash = 3; spawnDamageNumber(e.x, e.y, 5); }
+                if (e.hp <= 0) {
+                    score += (e.type === 8 ? 50 : (e.type === 7 ? 40 : 10)); playSound('explode'); createExplosion(e.x, e.y, "orange", 10); createExplosion(e.x, e.y, "red", 5);
+                    dropCoins(e.x, e.y, e.type);
+                    if (e.type === 7) { for(let k=0; k<3; k++) enemies.push({x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1}); }
+                    if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI(); 
+                    return false; 
+                }
                 break; 
             }
         }
@@ -1466,13 +1067,18 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
         let range = 80 + (playerStats.tesla * 20);
         if (Math.hypot(e.x - player.x, e.y - player.y) < range) {
             e.hp -= 0.05 * playerStats.tesla; activeTeslaArcs.push({x: e.x, y: e.y});
-            if (e.hp <= 0) { killEnemy(e); return false; }
-            else { e.hitFlash = 1; }
+            if (e.hp <= 0) {
+                score += (e.type === 8 ? 50 : (e.type === 7 ? 40 : 10)); playSound('explode'); createExplosion(e.x, e.y, "orange", 10); createExplosion(e.x, e.y, "cyan", 5);
+                dropCoins(e.x, e.y, e.type);
+                if (e.type === 7) { for(let k=0; k<3; k++) enemies.push({x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1}); }
+                if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI(); 
+                return false;
+            }
         }
     }
 
     if( Math.hypot(e.x - player.x, e.y - player.y) < 20 ) {
-        playerHit(20);
+        if (!godMode) health -= 20; playSound('hit'); triggerShake(10, 5); createExplosion(player.x, player.y, "cyan", 8); updateUI();
         if (e.type === 7) { for(let k=0; k<3; k++) enemies.push({x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1}); }
         if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI(); 
         return false; 
@@ -1482,8 +1088,14 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
       let b = bullets[i]; let hitBox = (e.type === 8 || e.type === 7) ? 25 : 20; 
       if( Math.hypot(b.x - e.x, b.y - e.y) < hitBox ){ 
         e.hp -= 1; bullets.splice(i, 1); 
-        if (e.hp <= 0) { killEnemy(e); return false; }
-        else { e.hitFlash = 3; playSound('hit'); createExplosion(e.x, e.y, "white", 5); return true; }
+        if (e.hp <= 0) {
+            score += (e.type === 8 ? 50 : (e.type === 7 ? 40 : 10)); playSound('explode'); triggerShake(e.type === 8 ? 10 : 5, e.type === 8 ? 4 : 2); 
+            createExplosion(e.x, e.y, "orange", 10); createExplosion(e.x, e.y, "red", 5);
+            dropCoins(e.x, e.y, e.type);
+            if (e.type === 7) { for(let k=0; k<3; k++) enemies.push({x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, speed: e.speed*2, type: 0, tick: 0, hp: 1}); } 
+            if (score >= nextBossScore && !bossActive) spawnBoss(); else updateUI(); 
+            return false; 
+        } else { playSound('hit'); createExplosion(e.x, e.y, "white", 5); return true; }
       }
     }
     return true;
@@ -1494,13 +1106,19 @@ b.dy = (b.dy * 0.9) + Math.sin(angle) * 2; let speed = Math.hypot(b.dx, b.dy); i
 
 // damageBoss is now a top-level function (not nested inside update every frame)
 function damageBoss(amount, impactX, impactY) {
-    if (!boss || boss.dying) return;
+    if (!boss) return;
     if (boss.type === 6) { enemyBullets.push({ x: impactX, y: impactY, dx: (Math.random()-0.5)*6, dy: 4, glow: "lime" }); }
     boss.hp -= amount; 
     if (boss.hp <= 0) {
-        boss.dying = true;
-        boss.deathTimer = 90; // 1.5 seconds sequence
-        boss.hp = 0;
+        bossActive = false; score += 500; playSound('explode'); triggerShake(60, 20); 
+        createExplosion(boss.x, boss.y, "magenta", 50, 4); createExplosion(boss.x, boss.y, "orange", 50, 5); 
+        powerups.push({ x: boss.x, y: boss.y, radius: 15 });
+        dropBossCoins(boss.x, boss.y, currentLevel);
+        if (currentLevel >= unlockedLevel) {
+            unlockedLevel = currentLevel + 1;
+            localStorage.setItem("unlockedLevel", unlockedLevel);
+        }
+        boss = null; triggerVictory(); 
     }
 }
 
@@ -1516,26 +1134,10 @@ function draw(){
   particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill(); }); ctx.globalAlpha = 1.0;
 
   ctx.lineWidth = 4; ctx.lineCap = "round";
-  bullets.forEach(b=>{
-    ctx.strokeStyle = b.color; ctx.shadowBlur = 10; ctx.shadowColor = b.color;
-    ctx.beginPath();
-    let speed = Math.hypot(b.dx, b.dy) || 1;
-    let tx = b.x - (b.dx/speed)*12; let ty = b.y - (b.dy/speed)*12;
-    ctx.moveTo(tx, ty); ctx.lineTo(b.x, b.y); ctx.stroke();
-    ctx.fillStyle = "white"; ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI*2); ctx.fill();
-  });
+  bullets.forEach(b=>{ ctx.strokeStyle = b.color; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.dx*1.5, b.y - b.dy*1.5); ctx.stroke(); });
 
-  let pulseB = 1 + 0.2*Math.sin(Date.now()/120);
-  enemyBullets.forEach(b=>{
-    ctx.fillStyle = "white"; ctx.shadowBlur = 15; ctx.shadowColor = b.glow;
-    ctx.beginPath(); ctx.arc(b.x, b.y, 4*pulseB, 0, Math.PI*2); ctx.fill();
-  });
-  ctx.globalCompositeOperation = "source-over"; ctx.shadowBlur = 0;
-
-  shockwaves.forEach(sw => {
-    ctx.save(); ctx.globalAlpha = sw.alpha; ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI*2); ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
-  }); 
+  enemyBullets.forEach(b=>{ ctx.fillStyle = "orange"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
+  ctx.globalCompositeOperation = "source-over"; 
 
   // --- Draw Alt Bombs ---
   altBombs.forEach(b => {
@@ -1581,10 +1183,7 @@ function draw(){
     else if (e.type === 8) { eGrad.addColorStop(0, "#880000"); eGrad.addColorStop(0.5, "#440000"); eGrad.addColorStop(1, "#110000"); ctx.shadowColor = "red"; ctx.strokeStyle = "#ff4444"; } 
     else { eGrad.addColorStop(0, "#ff4444"); eGrad.addColorStop(0.5, "#880000"); eGrad.addColorStop(1, "#330000"); ctx.shadowColor = "red"; ctx.strokeStyle = "#ffaaaa"; }
     
-    ctx.shadowBlur = 5; ctx.lineWidth = 1.5; ctx.beginPath();
-    if (e.hitFlash > 0) { e.hitFlash--; ctx.fillStyle = "white"; ctx.shadowColor = "white"; ctx.strokeStyle = "white"; }
-    else { ctx.fillStyle = eGrad; }
-    
+    ctx.shadowBlur = 5; ctx.fillStyle = eGrad; ctx.lineWidth = 1.5; ctx.beginPath();
     if (e.type === 0) { ctx.moveTo(15, 0); ctx.lineTo(-10, 15); ctx.lineTo(-5, 0); ctx.lineTo(-10, -15); } 
     else if (e.type === 1) { ctx.moveTo(15, 0); ctx.lineTo(5, 15); ctx.lineTo(-15, 10); ctx.lineTo(-15, -10); ctx.lineTo(5, -15); } 
     else if (e.type === 2) { ctx.moveTo(10, 0); ctx.lineTo(-15, 20); ctx.lineTo(-10, 0); ctx.lineTo(-15, -20); } 
@@ -1603,14 +1202,6 @@ function draw(){
   // --- ALL 10 BOSSES RENDERING ENGINE ---
   if (bossActive && boss) {
     ctx.save(); ctx.translate(boss.x, boss.y);
-    if (boss.dying) {
-        let flashStage = Math.floor(boss.deathTimer / 4) % 2;
-        if (flashStage === 0) {
-            ctx.filter = "brightness(0) invert(1)"; // white
-        } else {
-            ctx.filter = "hue-rotate(90deg) saturate(500%) sepia(1)"; // red tint
-        }
-    }
     
     if (boss.type === 2 || boss.type === 3 || boss.type === 9) { ctx.rotate(boss.angle); }
     
@@ -1756,14 +1347,6 @@ function draw(){
     ctx.restore();
   });
   
-  ctx.save();
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  for(let i=0; i<playerTrail.length-1; i++){
-    ctx.beginPath(); ctx.moveTo(playerTrail[i].x, playerTrail[i].y); ctx.lineTo(playerTrail[i+1].x, playerTrail[i+1].y);
-    ctx.lineWidth = 14 * (1 - i/14); ctx.globalAlpha = 1 - i/14; ctx.strokeStyle = "cyan"; ctx.shadowBlur = 10; ctx.shadowColor = "cyan"; ctx.stroke();
-  }
-  ctx.restore();
-  
   if(!gameOver && !gameWon) {
     ctx.save(); ctx.translate(player.x, player.y); ctx.rotate(player.angle); let pGrad = ctx.createLinearGradient(-15, 0, 15, 0); pGrad.addColorStop(0, "#aaaaaa"); pGrad.addColorStop(0.5, "#ffffff"); pGrad.addColorStop(1, "#aaaaaa");
     ctx.shadowBlur = 15; ctx.shadowColor = "cyan"; ctx.fillStyle = pGrad; ctx.strokeStyle = "cyan"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-10, 15); ctx.lineTo(-15, 15); ctx.lineTo(-5, 0); ctx.lineTo(-15, -15); ctx.lineTo(-10, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -1818,39 +1401,24 @@ function draw(){
   ctx.fillText("LEVEL " + (currentLevel + 1), c.width / 2, 8);
   ctx.restore();
 
-  comboTexts.forEach(ct => {
-    ctx.save(); let ratio = ct.life / ct.maxLife; ctx.globalAlpha = ratio; ctx.translate(ct.x, ct.y - (1-ratio)*40);
-    let scale = 1 + (1-ratio)*0.5; if (ct.streak >= 5) scale *= 1.5; ctx.scale(scale, scale);
-    ctx.font = "bold 20px Orbitron"; ctx.textAlign = "center"; ctx.fillStyle = "gold"; ctx.shadowBlur = 15; ctx.shadowColor = "gold";
-    ctx.fillText(ct.text, 0, 0); ctx.restore();
-  });
-
   // --- SECTOR CLEARED Banner ---
   if (sectorClearedTimer > 0) {
-    let progress = 1 - (sectorClearedTimer / 180); // 0 to 1 over 3 seconds
+    let alpha = Math.max(0, Math.min(1, sectorClearedTimer / 40));
     ctx.save();
-    ctx.fillStyle = "rgba(0, 255, 255, 0.15)";
-    ctx.fillRect(0, c.height/2 - 50, c.width * progress, 100); 
-    ctx.beginPath(); ctx.moveTo(c.width * progress, c.height/2 - 50); ctx.lineTo(c.width * progress, c.height/2 + 50);
-    ctx.strokeStyle = "cyan"; ctx.lineWidth = 4; ctx.shadowBlur = 20; ctx.shadowColor = "cyan"; ctx.stroke();
-    
-    if (progress > 0.3) {
-      ctx.globalAlpha = Math.min(1, (progress-0.3)*5);
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.shadowColor = "lime"; ctx.shadowBlur = 40; ctx.fillStyle = "lime";
-      ctx.font = "bold " + (c.width < 600 ? "28" : "48") + "px Orbitron";
-      ctx.fillText("✓ SECTOR CLEARED", c.width / 2, c.height / 2 - 15);
-      ctx.shadowBlur = 10; ctx.fillStyle = "white"; ctx.font = (c.width < 600 ? "12" : "16") + "px Orbitron";
-      ctx.fillText("CREDITS SAVED — ADVANCING TO NEXT ZONE", c.width / 2, c.height / 2 + 20);
-    }
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.shadowColor = "lime"; ctx.shadowBlur = 40;
+    ctx.fillStyle = "lime";
+    ctx.font = "bold " + (c.width < 600 ? "28" : "48") + "px Orbitron";
+    ctx.fillText("✓ SECTOR CLEARED", c.width / 2, c.height / 2 - 30);
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "white";
+    ctx.font = (c.width < 600 ? "12" : "16") + "px Orbitron";
+    ctx.fillText("CREDITS SAVED — ADVANCING TO NEXT ZONE", c.width / 2, c.height / 2 + 15);
+    ctx.fillStyle = "gold"; ctx.shadowColor = "gold"; ctx.shadowBlur = 15;
+    ctx.font = (c.width < 600 ? "11" : "14") + "px Orbitron";
+    ctx.fillText("BEST: " + (parseInt(localStorage.getItem("highScore")) || 0), c.width / 2, c.height / 2 + 45);
     ctx.restore();
-  }
-
-  if (health/playerStats.maxHealth < 0.33 && !gameOver && !inMenu && !gameWon) {
-    let alpha = 0.15 + 0.1 * Math.sin(Date.now() / 200);
-    let grd = ctx.createRadialGradient(c.width/2, c.height/2, c.height*0.3, c.width/2, c.height/2, c.height);
-    grd.addColorStop(0, "transparent"); grd.addColorStop(1, `rgba(255, 0, 0, ${alpha})`);
-    ctx.fillStyle = grd; ctx.fillRect(0,0,c.width,c.height);
   }
 
   ctx.restore(); 
@@ -1858,94 +1426,3 @@ function draw(){
 
 function loop(){ update(); draw(); requestAnimationFrame(loop); }
 loop();
-
-// Initialize UI with flicker effect
-showMenu('main');
-
-// ============================================================
-//  SETTINGS MENU HANDLERS
-// ============================================================
-document.getElementById('slider-bgm').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('bgm-val').innerText = val + '%';
-  bgmVolume = (val / 100) * 5.0; // max was 5.0
-});
-
-document.getElementById('slider-sfx').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('sfx-val').innerText = val + '%';
-  sfxVolume = (val / 100) * 1.0; // max was 1.0
-});
-
-document.getElementById('slider-sens').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('sens-val').innerText = val + '%';
-  joystickSensitivity = val / 100;
-});
-
-document.getElementById('slider-gui').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('gui-val').innerText = val + '%';
-  guiScale = val / 100;
-  let uiLayer = document.getElementById('ui-layer');
-  uiLayer.style.transform = `scale(${guiScale})`;
-  uiLayer.style.transformOrigin = "top left";
-  uiLayer.style.width = `${100 / guiScale}%`;
-  uiLayer.style.height = `${100 / guiScale}%`;
-});
-
-document.getElementById('slider-fov').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('fov-val').innerText = val + '%';
-  fovScale = val / 100;
-});
-
-document.getElementById('slider-game').addEventListener('input', (e) => {
-  let val = e.target.value;
-  document.getElementById('game-val').innerText = val + '%';
-  let scale = val / 100;
-  let wrapper = document.getElementById('game-wrapper');
-  wrapper.style.transform = `scale(${scale})`;
-  if (scale < 1) {
-      wrapper.classList.add('no-scroll-menus');
-  } else {
-      wrapper.classList.remove('no-scroll-menus');
-  }
-});
-
-// Post processing logic
-window.toggleFX = function(fx) {
-  postFX[fx] = !postFX[fx];
-  let btn = document.getElementById('toggle-' + fx);
-  if (postFX[fx]) {
-    btn.classList.add('active-diff');
-  } else {
-    btn.classList.remove('active-diff');
-  }
-
-  if (fx === 'scanlines') {
-    if (postFX.scanlines) document.body.classList.remove('no-scanlines');
-    else document.body.classList.add('no-scanlines');
-  }
-  if (fx === 'bloom') {
-    if (postFX.bloom) document.getElementById('c').classList.add('bloom-on');
-    else document.getElementById('c').classList.remove('bloom-on');
-  }
-};
-
-// Initial post processing apply based on defaults
-if (!postFX.bloom) document.getElementById('c').classList.remove('bloom-on');
-if (!postFX.scanlines) document.body.classList.add('no-scanlines');
-
-// Difficulty logic
-window.setDifficulty = function(level) {
-  difficulty = level;
-  document.getElementById('diff-easy').classList.remove('active-diff');
-  document.getElementById('diff-normal').classList.remove('active-diff');
-  document.getElementById('diff-hard').classList.remove('active-diff');
-  document.getElementById('diff-' + level).classList.add('active-diff');
-  
-  if (!inMenu && !isPaused && !gameOver && !gameWon) {
-    applyDifficultyTimers();
-  }
-};
